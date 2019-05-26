@@ -9,13 +9,13 @@ import (
 type Attraction struct {
     Name string `json:"name"`
     City string `json:"city"`
-    State string `json:"state"`
+    StateOrProvinceName string `json:"state_or_province_name"`
     Latitude float64 `json:"latitude"`
     Longitude float64 `json:"longitude"`
 }
 
 func (attraction *Attraction) MergeAttractionNameCityAndState() string {
-    return strings.Join([]string{attraction.Name, attraction.City, attraction.State}, ", ")
+    return strings.Join([]string{attraction.Name, attraction.City, attraction.StateOrProvinceName}, ", ")
 }
 
 func (attraction *Attraction) GeocodeAttraction() *geo.Location {

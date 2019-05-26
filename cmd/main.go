@@ -26,7 +26,7 @@ func server() {
 }
 
 func main() {
-    http.HandleFunc("/attraction", handler)
+    http.HandleFunc("/attractions", handler)
     server()
 
 }
