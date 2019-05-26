@@ -7,7 +7,7 @@ This application enables a user to easily find a list of the closest AirBNBs bas
 While AirBNB provides the means to select attractions near-by a listing, I personaly choose my attractions prior to picking where I sleep (so I am building a tool to do just this).
 
 # Idea
-1. Take a set of attractions and determine their coordinates
+1. ✅ Take a set of attractions and determine their coordinates
 2. Relate each attraction's coordinates to a neighborhood within the same city
 3. Construct a frequency table of where the key is the neighborhood name, and the value is the number of times it has appeared based on the attractions. For example:
 ```
