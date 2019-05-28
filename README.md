@@ -1,3 +1,5 @@
+# Project Status: [WIP]
+
 # Overview
 
 This application enables a user to easily find a list of the closest AirBNBs based on the attractions they have chosen to visit.  Due to the constraints AirBNB imposes on a posting's address, the closest region that can be identified is a neighborhood within a city.
@@ -8,7 +10,7 @@ While AirBNB provides the means to select attractions near-by a listing, I perso
 
 # Idea
 1. ✅ Take a set of attractions and determine their coordinates
-2. Relate each attraction's coordinates to a neighborhood within the same city
+2. ✅Relate each attraction's coordinates to a neighborhood within the same city
 3. Construct a frequency table of where the key is the neighborhood name, and the value is the number of times it has appeared based on the attractions. For example:
 ```
 {
@@ -27,6 +29,29 @@ While AirBNB provides the means to select attractions near-by a listing, I perso
 
 Unfortunately, AirBNB policy does not enable us to factor in distance to this optimization as they keep exact addresses private until booking. The best we can do is optimize within the best neighborhood.
 
+### Requrements
+
+A file titled `init.sql` is required. This file should perform the following actions:
+1. Populate a schema and table to store the neighborhood geocodings:
+
+        CREATE EXTENSION IF NOT EXISTS postgis;
+        SET CLIENT_ENCODING TO UTF8;
+        SET STANDARD_CONFORMING_STRINGS TO ON;
+        CREATE SCHEMA neighborhood_geocoding;
+        BEGIN;
+        CREATE TABLE "neighborhood_geocoding"."neighborhoods" (gid serial,
+        "name" varchar(254),
+        "city" varchar(80),
+        "state" varchar(80),
+        "country" varchar(80),
+
+        UNIQUE (name, city, state)
+        );
+        ALTER TABLE "neighborhood_geocoding"."neighborhoods" ADD PRIMARY KEY (gid);
+        SELECT AddGeometryColumn('neighborhood_geocoding','neighborhoods','geom','4326','MULTIPOLYGON',2);
+2. Insert some neighborhood multipolygons
+    - Note: you will have to resolve this yourself as insert files occupy too much space on GitHub. These are typically located within `.shp` files and can be found from a local government Open Data portal. There exists a tool, `shp2pgsql` which will convert these into valid PostgreSQL insert statements for you.
+ 
 ### Usage
 - A JSON array is expected to be passed to the `/attractions` endpoint:
 ```
