@@ -29,7 +29,7 @@ While AirBNB provides the means to select attractions near-by a listing, I perso
 
 Unfortunately, AirBNB policy does not enable us to factor in distance to this optimization as they keep exact addresses private until booking. The best we can do is optimize within the best neighborhood.
 
-### Requrements
+### Requirements
 
 A file titled `init.sql` is required. This file should perform the following actions:
 1. Populate a schema and table to store the neighborhood geocodings:
@@ -53,45 +53,56 @@ A file titled `init.sql` is required. This file should perform the following act
     - Note: you will have to resolve this yourself as insert files occupy too much space on GitHub. These are typically located within `.shp` files and can be found from a local government Open Data portal. There exists a tool, `shp2pgsql` which will convert these into valid PostgreSQL insert statements for you.
  
 ### Usage
-- A JSON array is expected to be passed to the `/attractions` endpoint:
-```
-[
+1. Build and run the application:
+    ```
+    cd cmd
+    go build <some_binary_file_name>
+    ./<some_binary_file_name>
+    ```
+
+    By default, the application runs on port 8080.
+
+2. Pass a list of attractions via a POST request to `/attractions`
+
+    - A JSON array is expected to be passed to the `/attractions` endpoint:
+    ```
+    [
+        {
+            "name": "",
+            "city": "",
+            "state_or_province_name": "",
+        }
+    ]
+    ```
+
+    The result looks as follows:
+    ```
     {
-        "name": "",
-        "city": "",
-        "state_or_province_name": "",
-    }
-]
-```
-
-The result looks as follows:
-```
-{
-    "successful_attractions": [
-        {
+        "successful_attractions": [
+            {
+                "name": "",
+                "city": "",
+                "state_or_province_name": ""
+                "latitude": 0.0,
+                "longitude": 0.0
+            }
+        ],
+        "failed_attractions": [
+            {
+                "name": "",
+                "city": "",
+                "state": "",
+                "latitude": 0.0,
+                "longitude": 0.0
+            }
+        ],
+        "ClosestNeighborhood": {
             "name": "",
-            "city": "",
-            "state_or_province_name": ""
+            "city_name": "",
             "latitude": 0.0,
             "longitude": 0.0
         }
-    ],
-    "failed_attractions": [
-        {
-            "name": "",
-            "city": "",
-            "state": "",
-            "latitude": 0.0,
-            "longitude": 0.0
-        }
-    ],
-    "ClosestNeighborhood": {
-        "name": "",
-        "city_name": "",
-        "latitude": 0.0,
-        "longitude": 0.0
     }
-}
-```
+    ```
 
-**Note**: In the event either all attractions are unsuccessfully geocoded, or all attractions are successfully geocoded, the `*_attractions` key may be null.
+    **Note**: In the event either all attractions are unsuccessfully geocoded, or all attractions are successfully geocoded, the `*_attractions` key may be null.
