@@ -2,14 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 
 	"../pkg/api"
+	"github.com/codingsince1985/geo-golang/openstreetmap"
 )
 
+// AttractionsResponse demonstrates the components involved for API responses.
 type AttractionsResponse struct {
 	SuccessfulAttractions []api.Attraction `json:"successful_attractions"`
 	FailedAttractions     []api.Attraction `json:"failed_attractions"`
@@ -39,9 +40,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var responseAttractions AttractionsResponse
+
 	var neighborhoods []api.Neighborhood
+	geocoder := openstreetmap.Geocoder()
 	for _, attraction := range attractions {
-		attractionLocation := attraction.GeocodeAttraction()
+		attractionLocation, _ := attraction.GeocodeAttraction(geocoder)
 
 		if attractionLocation == nil {
 			responseAttractions.FailedAttractions = append(responseAttractions.FailedAttractions, attraction)
@@ -60,8 +63,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		neighborhoods = append(neighborhoods, neighborhood)
 	}
 
-	fmt.Printf("Neighborhoods: %v\n", neighborhoods)
 	// TODO: for each neighborhood retrieved for each attraction, find the closest neighborhood to them all
+	api.FindBestNeighborhood(neighborhoods)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
