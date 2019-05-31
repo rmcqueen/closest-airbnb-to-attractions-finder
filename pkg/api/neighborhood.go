@@ -2,7 +2,6 @@ package api
 
 import (
 	"container/heap"
-	"fmt"
 	"log"
 
 	"../connections"
@@ -140,7 +139,6 @@ func getDistanceBetweenTwoCoordinates(point1 []float64, point2 []float64) (float
         ST_SetSRID(ST_Point($3, $4), 4326)
     ) as distance_in_meters`
 
-	fmt.Printf("Point1: %v, Point2: %v\n", point1, point2)
 	row := connections.PostgreSqlConnector{}.Connect().QueryRow(
 		pointDistanceQueryStr,
 		point1[0],
@@ -163,13 +161,20 @@ func getDistanceBetweenTwoCoordinates(point1 []float64, point2 []float64) (float
 // Best is defined here as:
 // 	a) Having the highest occurrence (frequency)
 //	b) Minimized distance between all other neighborhoods in the list
-func FindBestNeighborhood(neighborhoods []Neighborhood) (string, error) {
-	neighborhoodName, err := findNeighborhoodWithHighestOccurrence(neighborhoods)
+func FindBestNeighborhood(neighborhoods []Neighborhood) (Neighborhood, error) {
+	neighborhoodNames, err := findNeighborhoodWithHighestOccurrence(neighborhoods)
 	if err != nil {
 		log.Fatal(err)
+		return Neighborhood{}, err
 	}
 
-	return neighborhoodName[0], nil
+	for _, neighborhood := range neighborhoods {
+		if neighborhoodNames[0] == neighborhood.Name {
+			return neighborhood, nil
+		}
+	}
+
+	return Neighborhood{}, &NoNeighborhoodFoundError{"Unable to resolve neighborhood after attempting to find best match."}
 }
 
 // NoNeighborhoodFoundError indicates a neighborhood was not resolved
@@ -199,15 +204,13 @@ func findNeighborhoodWithHighestOccurrence(neighborhoods []Neighborhood) ([]stri
 	// occurrence.
 	h := getMinHeap(neighborhoodFrequency)
 
-	if h.Len() == 1 {
-		neighborhoodName := h.Pop().(neighorboodNameFrequency).name
-		return []string{neighborhoodName}, nil
+	neighborhoodNames, err := findNeighborhoodsWithSameFrequency(h)
+	if err != nil {
+		log.Fatal(err)
+		return []string{}, err
 	}
 
-	// TODO: for each unique neighborhood name, calculate the distance between it and all other neighborhoods.
-	// Construct yet another max heap and return the parent node.
-
-	return []string{}, nil
+	return neighborhoodNames, nil
 }
 
 type neighorboodNameFrequency struct {
@@ -255,10 +258,9 @@ func findNeighborhoodsWithSameFrequency(h *neighborhoodNameFrequencyMinHeap) ([]
 		return []string{v.(neighorboodNameFrequency).name}, nil
 	}
 
-	firstElem := h.Pop().(neighorboodNameFrequency)
-	maxCount := firstElem.count
-	neighborhoodNames := []string{firstElem.name}
-	for {
+	maxCount := 0
+	var neighborhoodNames []string
+	for i := 0; i < h.Len(); i++ {
 		v := h.Pop()
 		if v.(neighorboodNameFrequency).count < maxCount {
 			break

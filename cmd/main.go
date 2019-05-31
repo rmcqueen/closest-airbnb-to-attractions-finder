@@ -64,7 +64,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: for each neighborhood retrieved for each attraction, find the closest neighborhood to them all
-	api.FindBestNeighborhood(neighborhoods)
+	closestNeighborhood, err := api.FindBestNeighborhood(neighborhoods)
+	if err != nil {
+		log.Fatal(err)
+	} else {
+		responseAttractions.ClosestNeighborhood = closestNeighborhood
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
