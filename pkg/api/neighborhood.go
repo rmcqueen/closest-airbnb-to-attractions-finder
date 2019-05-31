@@ -1,14 +1,17 @@
 package api
 
 import (
+	"container/heap"
 	"fmt"
 	"log"
 
 	"../connections"
 
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // Used to interact with PostgreSQL/PostGIS
 )
 
+// Neighborhood is defined as a localised community within a larger city (i.e, 'Downtown')
+// TODO: make lat/lng a struct
 type Neighborhood struct {
 	Name                string  `json:"name"`
 	City                string  `json:"city_name"`
@@ -18,6 +21,7 @@ type Neighborhood struct {
 	Longitude           float64 `json:"longitude"`
 }
 
+// FindNeighborhoodContainingAttraction resolves the neighborhood of the given attraction via geocoding.
 func FindNeighborhoodContainingAttraction(attraction Attraction) (Neighborhood, error) {
 	attractionInNeighborhoodQuery := `
         SELECT ST_Contains(neighborhood_poly, attr_point) as in_neighborhood, name, city, state, country
@@ -69,7 +73,6 @@ func FindNeighborhoodContainingAttraction(attraction Attraction) (Neighborhood, 
 		latitude := coordinates[0]
 		longitude := coordinates[1]
 		attractionsCoordinates := []float64{attraction.Longitude, attraction.Latitude}
-		fmt.Printf("Getting distance for: %s\n", attraction.Name)
 		distanceInMeters, err := getDistanceBetweenTwoCoordinates(coordinates, attractionsCoordinates)
 
 		if err != nil {
@@ -80,9 +83,7 @@ func FindNeighborhoodContainingAttraction(attraction Attraction) (Neighborhood, 
 		neighborhood := Neighborhood{name, city, stateOrProvinceName, country, latitude, longitude}
 		matchedNeighborhoods = append(matchedNeighborhoods, neighborhood)
 		if distanceInMeters < minDistanceInMeters {
-			fmt.Printf("Distance before setting %.6f\n", minDistanceInMeters)
 			minDistanceInMeters = distanceInMeters
-			fmt.Printf("Distance after setting %.6f\n", minDistanceInMeters)
 			bestNeighborhoodIdx = i
 		}
 		i++
@@ -95,14 +96,11 @@ func FindNeighborhoodContainingAttraction(attraction Attraction) (Neighborhood, 
 	return matchedNeighborhoods[bestNeighborhoodIdx], err
 }
 
+// Returns the coordinates of a MultiPolygon's centroid (if found). idx 0 => latitude, idx 1 => longitude
 func resolveNeighborhoodMultiPolygonsCentroidPoint(
 	neighborhoodName string,
 	neighborhoodCity string,
 	neighborhoodState string) ([]float64, error) {
-	/**
-	  Returns the coordinates of a MultiPolygon's centroid (if found).
-	  idx 0 => latitude, idx 1 => longitude
-	*/
 	centroidQueryStr := `
     SELECT ST_X(coordinates) as longitude, ST_Y(coordinates) as latitude
     FROM (
@@ -133,8 +131,9 @@ func resolveNeighborhoodMultiPolygonsCentroidPoint(
 	return coordinates, err
 }
 
+// Get distance between two coordinate in meters.
+// See: https://postgis.net/docs/manual-1.4/ST_Distance_Sphere.html
 func getDistanceBetweenTwoCoordinates(point1 []float64, point2 []float64) (float64, error) {
-	// Get distance in meters. See: https://postgis.net/docs/manual-1.4/ST_Distance_Sphere.html
 	pointDistanceQueryStr := `
     SELECT ST_Distance_Sphere(
         ST_SetSRID(ST_Point($1, $2), 4326),
@@ -158,4 +157,122 @@ func getDistanceBetweenTwoCoordinates(point1 []float64, point2 []float64) (float
 	}
 
 	return distanceInMeters, err
+}
+
+// FindBestNeighborhood resolves the "best" neighborhood from the given array of neighborhoods.
+// Best is defined here as:
+// 	a) Having the highest occurrence (frequency)
+//	b) Minimized distance between all other neighborhoods in the list
+func FindBestNeighborhood(neighborhoods []Neighborhood) (string, error) {
+	neighborhoodName, err := findNeighborhoodWithHighestOccurrence(neighborhoods)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return neighborhoodName[0], nil
+}
+
+// NoNeighborhoodFoundError indicates a neighborhood was not resolved
+type NoNeighborhoodFoundError struct {
+	message string
+}
+
+func (e *NoNeighborhoodFoundError) Error() string {
+	return e.message
+}
+
+func findNeighborhoodWithHighestOccurrence(neighborhoods []Neighborhood) ([]string, error) {
+	neighborhoodFrequency := make(map[string]int)
+
+	// Construct frequency table
+	for _, neighborhood := range neighborhoods {
+		_, keyExists := neighborhoodFrequency[neighborhood.Name]
+
+		if keyExists {
+			neighborhoodFrequency[neighborhood.Name]++
+		} else {
+			neighborhoodFrequency[neighborhood.Name] = 1
+		}
+	}
+
+	// Build a min-heap: O(n log(n)). We choose a heap to easily find all neighborhoods tying for the max
+	// occurrence.
+	h := getMinHeap(neighborhoodFrequency)
+
+	if h.Len() == 1 {
+		neighborhoodName := h.Pop().(neighorboodNameFrequency).name
+		return []string{neighborhoodName}, nil
+	}
+
+	// TODO: for each unique neighborhood name, calculate the distance between it and all other neighborhoods.
+	// Construct yet another max heap and return the parent node.
+
+	return []string{}, nil
+}
+
+type neighorboodNameFrequency struct {
+	name  string
+	count int
+}
+
+type neighborhoodNameFrequencyMinHeap []neighorboodNameFrequency
+
+func (h neighborhoodNameFrequencyMinHeap) Less(i, j int) bool { return h[i].count < h[j].count }
+func (h neighborhoodNameFrequencyMinHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h neighborhoodNameFrequencyMinHeap) Len() int           { return len(h) }
+
+func (h *neighborhoodNameFrequencyMinHeap) Push(x interface{}) {
+	*h = append(*h, x.(neighorboodNameFrequency))
+}
+
+func (h *neighborhoodNameFrequencyMinHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
+}
+
+func getMinHeap(m map[string]int) *neighborhoodNameFrequencyMinHeap {
+	h := &neighborhoodNameFrequencyMinHeap{}
+	heap.Init(h)
+	for k, v := range m {
+		heap.Push(h, neighorboodNameFrequency{k, v})
+	}
+
+	return h
+}
+
+// findNeighborhoodsWithSameFrequency returns all neighborhoods that have the same number of entries.
+// Example: {"Downtown": 4, "Southside": 4, "East Bay": 4}
+func findNeighborhoodsWithSameFrequency(h *neighborhoodNameFrequencyMinHeap) ([]string, error) {
+	if h.Len() == 0 {
+		return []string{}, nil
+	}
+
+	if h.Len() == 1 {
+		v := h.Pop()
+		return []string{v.(neighorboodNameFrequency).name}, nil
+	}
+
+	firstElem := h.Pop().(neighorboodNameFrequency)
+	maxCount := firstElem.count
+	neighborhoodNames := []string{firstElem.name}
+	for {
+		v := h.Pop()
+		if v.(neighorboodNameFrequency).count < maxCount {
+			break
+		} else {
+			neighborhoodNames = append(neighborhoodNames, v.(neighorboodNameFrequency).name)
+		}
+	}
+
+	return neighborhoodNames, nil
+}
+
+// TODO: Implement me
+func findNeighborhoodWithLeastDistanceToAllOtherNeighborhoods() (string, error) {
+	// General idea: take the top N neighborhoods and find the one which has
+	// the least distance to all of them.
+	return "", nil
 }
