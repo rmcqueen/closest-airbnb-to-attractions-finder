@@ -99,6 +99,8 @@ A file titled `init.sql` is required. This file should perform the following act
         "ClosestNeighborhood": {
             "name": "",
             "city_name": "",
+            "state_or_province_name": "",
+            "country": "",
             "latitude": 0.0,
             "longitude": 0.0
         }
