@@ -63,7 +63,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		neighborhoods = append(neighborhoods, neighborhood)
 	}
 
-	// TODO: for each neighborhood retrieved for each attraction, find the closest neighborhood to them all
 	closestNeighborhood, err := api.FindBestNeighborhood(neighborhoods)
 	if err != nil {
 		log.Fatal(err)
