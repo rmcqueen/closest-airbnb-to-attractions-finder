@@ -45,7 +45,7 @@ func (attraction *Attraction) MergeAttractionNameCityAndState() (string, error) 
 func (attraction *Attraction) GeocodeAttraction(geocoder geo.Geocoder) (*geo.Location, error) {
 	mergedAttraction, err := attraction.MergeAttractionNameCityAndState()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Unable to merge attraction location identifiers; having error: %v", err)
 		return nil, err
 	}
 
