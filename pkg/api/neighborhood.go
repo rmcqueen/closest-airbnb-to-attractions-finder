@@ -2,7 +2,12 @@ package api
 
 import (
 	"container/heap"
+	"crypto/md5"
+	"encoding/hex"
 	"log"
+	"math"
+	"sort"
+	"strings"
 
 	"../connections"
 
@@ -31,7 +36,7 @@ func FindNeighborhoodContainingAttraction(attraction Attraction) (Neighborhood, 
         WHERE ST_Contains(neighborhood_poly, attr_point) is true
         `
 
-	rows, err := connections.PostgreSqlConnector{}.Connect().Query(
+	rows, err := connections.Init().Query(
 		attractionInNeighborhoodQuery,
 		attraction.Longitude,
 		attraction.Latitude)
@@ -75,7 +80,7 @@ func FindNeighborhoodContainingAttraction(attraction Attraction) (Neighborhood, 
 		distanceInMeters, err := getDistanceBetweenTwoCoordinates(coordinates, attractionsCoordinates)
 
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("Unable to get distance between two coordinates having error: %v\n", err)
 			continue
 		}
 
@@ -114,7 +119,7 @@ func resolveNeighborhoodMultiPolygonsCentroidPoint(
         ) as result
     `
 
-	row := connections.PostgreSqlConnector{}.Connect().QueryRow(
+	row := connections.Init().QueryRow(
 		centroidQueryStr,
 		neighborhoodName,
 		neighborhoodCity,
@@ -139,7 +144,7 @@ func getDistanceBetweenTwoCoordinates(point1 []float64, point2 []float64) (float
         ST_SetSRID(ST_Point($3, $4), 4326)
     ) as distance_in_meters`
 
-	row := connections.PostgreSqlConnector{}.Connect().QueryRow(
+	row := connections.Init().QueryRow(
 		pointDistanceQueryStr,
 		point1[0],
 		point1[1],
@@ -150,8 +155,8 @@ func getDistanceBetweenTwoCoordinates(point1 []float64, point2 []float64) (float
 	err := row.Scan(&distanceInMeters)
 
 	if err != nil {
-		log.Fatal(err)
-		return 0, err
+		log.Print(err)
+		return 0.0, err
 	}
 
 	return distanceInMeters, err
@@ -164,14 +169,23 @@ func getDistanceBetweenTwoCoordinates(point1 []float64, point2 []float64) (float
 func FindBestNeighborhood(neighborhoods []Neighborhood) (Neighborhood, error) {
 	neighborhoodNames, err := findNeighborhoodWithHighestOccurrence(neighborhoods)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Unable to resolve neighborhoods with highest occurrence having error: %v\n", err)
 		return Neighborhood{}, err
 	}
 
-	for _, neighborhood := range neighborhoods {
-		if neighborhoodNames[0] == neighborhood.Name {
-			return neighborhood, nil
+	var highestOccurrenceNeighborhoods []Neighborhood
+	for _, neighborhoodName := range neighborhoodNames {
+		for _, neighborhood := range neighborhoods {
+			if neighborhoodName == neighborhood.Name {
+				highestOccurrenceNeighborhoods = append(highestOccurrenceNeighborhoods, neighborhood)
+			}
 		}
+	}
+
+	optimalNeighborhoodName, err := findNeighborhoodWithLeastDistanceToAllOtherNeighborhoods(highestOccurrenceNeighborhoods)
+
+	if err == nil {
+		return optimalNeighborhoodName, nil
 	}
 
 	return Neighborhood{}, &NoNeighborhoodFoundError{"Unable to resolve neighborhood after attempting to find best match."}
@@ -200,13 +214,13 @@ func findNeighborhoodWithHighestOccurrence(neighborhoods []Neighborhood) ([]stri
 		}
 	}
 
-	// Build a min-heap: O(n log(n)). We choose a heap to easily find all neighborhoods tying for the max
+	// Build a max-heap: O(n log(n)). We choose a heap to easily find all neighborhoods tying for the max
 	// occurrence.
-	h := getMinHeap(neighborhoodFrequency)
+	h := getMaxHeap(neighborhoodFrequency)
 
 	neighborhoodNames, err := findNeighborhoodsWithSameFrequency(h)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Unable to resolve neighborhoods with the same frequency; having error: %v\n", err)
 		return []string{}, err
 	}
 
@@ -236,7 +250,7 @@ func (h *neighborhoodNameFrequencyMinHeap) Pop() interface{} {
 	return x
 }
 
-func getMinHeap(m map[string]int) *neighborhoodNameFrequencyMinHeap {
+func getMaxHeap(m map[string]int) *neighborhoodNameFrequencyMinHeap {
 	h := &neighborhoodNameFrequencyMinHeap{}
 	heap.Init(h)
 	for k, v := range m {
@@ -261,20 +275,129 @@ func findNeighborhoodsWithSameFrequency(h *neighborhoodNameFrequencyMinHeap) ([]
 	maxCount := 0
 	var neighborhoodNames []string
 	for i := 0; i < h.Len(); i++ {
-		v := h.Pop()
-		if v.(neighorboodNameFrequency).count < maxCount {
+		v := h.Pop().(neighorboodNameFrequency)
+		if v.count < maxCount {
 			break
 		} else {
-			neighborhoodNames = append(neighborhoodNames, v.(neighorboodNameFrequency).name)
+			maxCount = v.count
+			neighborhoodNames = append(neighborhoodNames, v.name)
 		}
 	}
 
 	return neighborhoodNames, nil
 }
 
-// TODO: Implement me
-func findNeighborhoodWithLeastDistanceToAllOtherNeighborhoods() (string, error) {
-	// General idea: take the top N neighborhoods and find the one which has
-	// the least distance to all of them.
-	return "", nil
+// Edge denotes a connection between two Neighborhood nodes.
+type Edge struct {
+	sourceNode       Neighborhood
+	targetNode       Neighborhood
+	distanceInMeters float64
+}
+
+// Graph stores all Neighborhoods and their connections between each other.
+type Graph struct {
+	nodes []Neighborhood
+	edges map[string][]Edge
+}
+
+func (graph Graph) buildGraphFromNeighborhoods(neighborhoods []Neighborhood) (Graph, error) {
+	for _, neighborhood := range neighborhoods {
+		graph.nodes = append(graph.nodes, neighborhood)
+	}
+
+	return graph, nil
+}
+
+func findNeighborhoodWithLeastDistanceToAllOtherNeighborhoods(neighborhoods []Neighborhood) (Neighborhood, error) {
+	var graph Graph
+	// Ideally, this would be a thread-safe cache to deal with concurrent requests (i.e, Redis).
+	distanceCache := make(map[string]float64)
+
+	for _, neighborhood := range neighborhoods {
+		sourceNode := neighborhood
+		graph.nodes = append(graph.nodes, sourceNode)
+		remainingNeighborhoods := composeDifferingNeighborhoodNamesSlice(neighborhood.Name, neighborhoods)
+		for _, otherNeighborhood := range remainingNeighborhoods {
+			targetNode := neighborhood
+
+			var distanceInMeters float64
+			hashedString := generateNeighborhoodCacheKey(neighborhood.Name, otherNeighborhood.Name)
+			_, ok := distanceCache[hashedString]
+
+			if ok == false {
+				distanceInMeters, _ = getDistanceBetweenTwoCoordinates([]float64{neighborhood.Longitude, neighborhood.Latitude}, []float64{otherNeighborhood.Longitude, otherNeighborhood.Latitude})
+				distanceCache[hashedString] = distanceInMeters
+			} else {
+				distanceInMeters = distanceCache[hashedString]
+			}
+
+			edge := Edge{sourceNode, targetNode, distanceInMeters}
+			graph.edges[neighborhood.Name] = append(graph.edges[neighborhood.Name], edge)
+		}
+	}
+
+	optimalNeighborhood, err := findMinDistanceBetweenNodes(graph)
+	if err != nil {
+		log.Printf("Error after finding optimal neighborhood: %v\n", err)
+		return Neighborhood{}, err
+	}
+
+	return optimalNeighborhood, nil
+}
+
+func composeDifferingNeighborhoodNamesSlice(currentNeighborhoodName string, allNeighborhoodNames []Neighborhood) []Neighborhood {
+	var newSlice []Neighborhood
+	for _, neighborhood := range allNeighborhoodNames {
+		if currentNeighborhoodName != neighborhood.Name {
+			newSlice = append(newSlice, neighborhood)
+		}
+	}
+
+	return newSlice
+}
+
+// Caching PostGIS calculations on geometric objects is desired as they're computationally, and time expensive.
+func generateNeighborhoodCacheKey(neighborhoodName string, otherNeighborhoodName string) string {
+	// sort to ensure we always get the same hash value for the same two keys.
+	cacheKeyElements := []string{neighborhoodName, otherNeighborhoodName}
+	sort.Strings(cacheKeyElements)
+	cacheKey := strings.Join(cacheKeyElements, "")
+
+	hasher := md5.New()
+	hasher.Write([]byte(cacheKey))
+	hashedString := hex.EncodeToString(hasher.Sum(nil))
+
+	return hashedString
+}
+
+// Searches the constructed graph for the neighborhood with min distance between all other points.
+// Time complexity is O(V*E) where V represents the number of vertices to visit, and E represents the
+// number of edges to examine.
+func findMinDistanceBetweenNodes(graph Graph) (Neighborhood, error) {
+	if len(graph.nodes) == 1 {
+		return graph.nodes[0], nil
+	}
+
+	neighborhoodDistanceSums := make(map[string]float64)
+	for sourceNode, edges := range graph.edges {
+		_, ok := neighborhoodDistanceSums[sourceNode]
+		if ok == true {
+			neighborhoodDistanceSums[sourceNode] = 0
+		}
+		for _, targetNode := range edges {
+			neighborhoodDistanceSums[sourceNode] += targetNode.distanceInMeters
+		}
+	}
+
+	minValue := math.Inf(1)
+	var bestNeighborhood Neighborhood
+	for _, node := range graph.nodes {
+		nodeDistanceSum := neighborhoodDistanceSums[node.Name]
+		if nodeDistanceSum < minValue {
+			minValue = nodeDistanceSum
+			bestNeighborhood = node
+		}
+	}
+
+	return bestNeighborhood, nil
 }
