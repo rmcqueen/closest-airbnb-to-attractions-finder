@@ -6,14 +6,10 @@ import (
 	"os"
 	"strconv"
 
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // Enables interaction with psql
 )
 
-type DatabaseConnection interface {
-	Connect() sql.DB
-}
-
-type postgreSqlConnection struct {
+type postgreSQLConnection struct {
 	HostName     string
 	Port         int64
 	UserName     string
@@ -22,11 +18,11 @@ type postgreSqlConnection struct {
 	Connection   *sql.DB
 }
 
-type PostgreSqlConnector struct{}
+var psqlConnection *postgreSQLConnection
 
-var psqlConnection *postgreSqlConnection
-
-func (conn PostgreSqlConnector) Connect() *sql.DB {
+// Init generates a one-time database connection for the entire application.
+// This prevents opening multiple database connections when not necessary.
+func Init() *sql.DB {
 	if psqlConnection != nil {
 		return psqlConnection.Connection
 	}
@@ -52,7 +48,7 @@ func (conn PostgreSqlConnector) Connect() *sql.DB {
 		panic(err)
 	}
 
-	psqlConnection := postgreSqlConnection{hostName, port, user, pwd, dbName, db}
+	psqlConnection = &postgreSQLConnection{hostName, port, user, pwd, dbName, db}
 
 	return psqlConnection.Connection
 }
