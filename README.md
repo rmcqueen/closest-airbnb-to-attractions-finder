@@ -50,14 +50,14 @@ A file titled `init.sql` is required. This file should perform the following act
         ALTER TABLE "neighborhood_geocoding"."neighborhoods" ADD PRIMARY KEY (gid);
         SELECT AddGeometryColumn('neighborhood_geocoding','neighborhoods','geom','4326','MULTIPOLYGON',2);
 2. Insert some neighborhood multipolygons
-    - Note: you will have to resolve this yourself as insert files occupy too much space on GitHub. These are typically located within `.shp` files and can be found from a local government Open Data portal. There exists a tool, `shp2pgsql` which will convert these into valid PostgreSQL insert statements for you.
+    - Note: you will have to resolve this yourself as insert files occupy too much space on GitHub. These are typically located within `.shp` files and can be found from a local government Open Data portal. There exists a tool, `shp2pgsql`, which will convert these into valid PostgreSQL insert statements for you.
  
 ### Usage
 1. Build and run the application:
     ```
     cd cmd
     go build <some_binary_file_name>
-    ./<some_binary_file_name>
+    DB_HOST="" DB_PORT="" DB_USER="" DB_PWD="" DB_NAME="" ./<some_binary_file_name>
     ```
 
     By default, the application runs on port 8080.
