@@ -20,7 +20,7 @@ While AirBNB provides the means to select attractions near-by a listing, I perso
     "Marpole": 0
 }
 ```
-4. [50%] Find the neighborhood which contains a majority of the attractions, and minimizes the distance to the other attractions within other neighborhoods
+4. ✅ Find the neighborhood which contains a majority of the attractions, and minimizes the distance to the other attractions within other neighborhoods
 5. Look-up all related AirBNBs for the matched neighborhood and apply some filtering criterion based on personal preferences (i.e, "must be < $90 a night, be an apartment, and not shared.")
 6. Construct a list of matches and optimize based on the following orderings (first item has highest priority):
     1. Cost per night
