@@ -57,7 +57,7 @@ A file titled `init.sql` is required. This file should perform the following act
     ```
     cd cmd
     go build <some_binary_file_name>
-    DB_HOST="" DB_PORT="" DB_USER="" DB_PWD="" DB_NAME="" ./<some_binary_file_name>
+    DB_HOST=<HOST> DB_PORT=<PORT> DB_USER=<USER> DB_PWD=<PASSWORD> DB_NAME=<NAME> ./<some_binary_file_name>
     ```
 
     By default, the application runs on port 8080.
