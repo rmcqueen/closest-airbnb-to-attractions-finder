@@ -1,5 +1,3 @@
-# Project Status: [WIP]
-
 # Overview
 
 This application enables a user to easily find a list of the closest AirBNBs based on the attractions they have chosen to visit.  Due to the constraints AirBNB imposes on a posting's address, the closest region that can be identified is a neighborhood within a city.  I am primarily developing this to gain a basic understanding of golang.  The  code is likely to not align very well with golang's best practices.
