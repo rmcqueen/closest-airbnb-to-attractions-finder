@@ -96,7 +96,7 @@ A file titled `init.sql` is required. This file should perform the following act
                 "longitude": 0.0
             }
         ],
-        "ClosestNeighborhood": {
+        "closest_neighborhood": {
             "name": "",
             "city_name": "",
             "state_or_province_name": "",
