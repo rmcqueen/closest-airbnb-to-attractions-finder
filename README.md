@@ -37,7 +37,8 @@ A file titled `init.sql` is required. This file should perform the following act
         SET STANDARD_CONFORMING_STRINGS TO ON;
         CREATE SCHEMA neighborhood_geocoding;
         BEGIN;
-        CREATE TABLE "neighborhood_geocoding"."neighborhoods" (gid serial,
+        CREATE TABLE "neighborhood_geocoding"."neighborhoods" (
+        "gid" serial primary key,
         "name" varchar(254),
         "city" varchar(80),
         "state" varchar(80),
@@ -45,10 +46,11 @@ A file titled `init.sql` is required. This file should perform the following act
 
         UNIQUE (name, city, state)
         );
-        ALTER TABLE "neighborhood_geocoding"."neighborhoods" ADD PRIMARY KEY (gid);
-        SELECT AddGeometryColumn('neighborhood_geocoding','neighborhoods','geom','4326','MULTIPOLYGON',2);
+
+        SELECT AddGeometryColumn('neighborhood_geocoding', 'neighborhoods', 'geom', '4326', 'MULTIPOLYGON', 2);
+
 2. Insert some neighborhood multipolygons
-    - Note: you will have to resolve this yourself as insert files occupy too much space on GitHub. These are typically located within `.shp` files and can be found from a local government Open Data portal. There exists a tool, `shp2pgsql`, which will convert these into valid PostgreSQL insert statements for you.
+    - Note: you will have to resolve this yourself as insert files occupy too much space on GitHub. These are typically located within `.shp` files and can be found from a local government Open Data portal. There exists a tool, `shp2pgsql`, which will convert these into valid PostgreSQL insert statements for you. I used this particular dataset from the [City of Vancouver](https://opendata.vancouver.ca/explore/dataset/local-area-boundary/export/)
  
 ### Usage
 1. Build and run the application:
